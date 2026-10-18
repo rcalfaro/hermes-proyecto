@@ -81,3 +81,20 @@ print(salida["informe"]["recomendacion"])  # M9
 
 > **Nota legal:** análisis orientativo generado con datos sintéticos; no
 > sustituye el criterio profesional del abogado o notario.
+
+---
+
+## Versión web (HTML)
+
+**Archivo:** `justicia_dt/index.html` — dashboard web **autocontenido** (un solo archivo, sin servidor ni CDN).
+
+**Regenerar:** `python justicia_dt/exportar_html.py` (ejecuta el motor Python y exporta los resultados a la página).
+
+Contenido de la página (5 pestañas):
+1. 🏛️ **Arquitectura** (§3.1): cadena Selección de pretensión → Subtipo → Escenarios → Resultados; 6 capas del DT; núcleo híbrido C1–C5; tabla de pretensiones Ley 902.
+2. 🧩 **9 Módulos** (§3.2): tarjetas M1–M9 con su funcionalidad.
+3. 🔁 **Flujo de Uso** (§3.3): los 5 pasos + flujos de etapas por pretensión.
+4. 🤖 **Análisis del DT**: demo §5 (Empresa A vs B) con datos reales generados por `app.py`: KPIs, escenarios what-if con barras, duración por etapa, anomalías M7, recomendación M9, grafo de conocimiento SVG y consola del motor Python.
+5. 📝 **Nuevo Caso**: formulario interactivo — el abogado elige pretensión/subtipo, cuantía, juzgado y pruebas; el DT recalcula en el navegador (motor JS portado fielmente de Python: Monte Carlo determinista mulberry32, mismas fórmulas M3–M9).
+
+Verificado con Node.js: renderizado completo, equivalencia JS↔Python (viabilidad idéntica en las 6 pretensiones; éxito/duración/costo dentro de tolerancia Monte Carlo) y reproducibilidad determinista.
