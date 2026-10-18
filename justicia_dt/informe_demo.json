@@ -1,0 +1,159 @@
+{
+  "expediente": "NIC-2026-45753",
+  "hash_integridad": "2f8d50139e5f0cfc",
+  "generado": "2026-10-18T18:58:57",
+  "caso": {
+    "pretension": "De condena",
+    "subtipo": "incumplimiento",
+    "cuantia_usd": 50000.0,
+    "juzgado": "Civil de Managua"
+  },
+  "viabilidad": {
+    "viabilidad": 1.0,
+    "veredicto": "Viable",
+    "duracion_esperada_meses": "6-15",
+    "obstaculos": [],
+    "requisitos_evaluados": [
+      "obligacion",
+      "incumplimiento",
+      "nexo_causal"
+    ]
+  },
+  "escenarios": [
+    {
+      "escenario": "base",
+      "probabilidad_exito": 0.678,
+      "duracion_meses": 10.1,
+      "costo_usd": 5003,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'base'."
+    },
+    {
+      "escenario": "allanamiento",
+      "probabilidad_exito": 0.894,
+      "duracion_meses": 3.8,
+      "costo_usd": 2103,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'allanamiento'."
+    },
+    {
+      "escenario": "reconvencion",
+      "probabilidad_exito": 0.589,
+      "duracion_meses": 14.9,
+      "costo_usd": 7993,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'reconvencion'."
+    },
+    {
+      "escenario": "excepciones_previas",
+      "probabilidad_exito": 0.631,
+      "duracion_meses": 12.5,
+      "costo_usd": 6508,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'excepciones_previas'."
+    },
+    {
+      "escenario": "prorroga",
+      "probabilidad_exito": 0.665,
+      "duracion_meses": 12.0,
+      "costo_usd": 5497,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'prorroga'."
+    },
+    {
+      "escenario": "acuerdo_conciliatorio",
+      "probabilidad_exito": 0.813,
+      "duracion_meses": 4.5,
+      "costo_usd": 2765,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'acuerdo_conciliatorio'."
+    },
+    {
+      "escenario": "apelacion",
+      "probabilidad_exito": 0.549,
+      "duracion_meses": 22.6,
+      "costo_usd": 12025,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'apelacion'."
+    },
+    {
+      "escenario": "incidente_probatorio",
+      "probabilidad_exito": 0.615,
+      "duracion_meses": 13.5,
+      "costo_usd": 7250,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'incidente_probatorio'."
+    },
+    {
+      "escenario": "recusacion",
+      "probabilidad_exito": 0.601,
+      "duracion_meses": 13.0,
+      "costo_usd": 6250,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'recusacion'."
+    },
+    {
+      "escenario": "nulidad_actuaciones",
+      "probabilidad_exito": 0.49,
+      "duracion_meses": 18.1,
+      "costo_usd": 9528,
+      "descripcion": "Simulación Monte Carlo (2000 iteraciones), escenario 'nulidad_actuaciones'."
+    }
+  ],
+  "duracion_por_etapa": {
+    "Demanda": 1.0,
+    "Contestación": 1.5,
+    "Audiencia Inicial": 1.5,
+    "Audiencia Probatoria": 3.5,
+    "Sentencia": 1.5,
+    "Ejecución": 1.0
+  },
+  "prediccion_resultado": {
+    "probabilidad_exito_base": 0.678,
+    "mejor_escenario": "allanamiento",
+    "ranking": [
+      [
+        "allanamiento",
+        0.894
+      ],
+      [
+        "acuerdo_conciliatorio",
+        0.813
+      ],
+      [
+        "base",
+        0.678
+      ],
+      [
+        "prorroga",
+        0.665
+      ],
+      [
+        "excepciones_previas",
+        0.631
+      ],
+      [
+        "incidente_probatorio",
+        0.615
+      ],
+      [
+        "recusacion",
+        0.601
+      ],
+      [
+        "reconvencion",
+        0.589
+      ],
+      [
+        "apelacion",
+        0.549
+      ],
+      [
+        "nulidad_actuaciones",
+        0.49
+      ]
+    ]
+  },
+  "anomalias": {
+    "alertas": [
+      {
+        "tipo": "retraso",
+        "mensaje": "Retraso anómalo (>2σ) en: Audiencia Probatoria"
+      }
+    ],
+    "nivel": "amarillo"
+  },
+  "recomendacion": "Para la pretensión de incumplimiento, se recomienda explorar el escenario 'allanamiento' (éxito 89%, 3.8 meses, USD 2,103). Evite generar incidencias que prolonguen el juicio; la pretensión es sólida siempre que se acrediten los requisitos: obligacion, incumplimiento, nexo_causal.",
+  "nota_legal": "Análisis orientativo con datos sintéticos (Fase 1). No sustituye el criterio profesional."
+}
