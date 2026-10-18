@@ -345,7 +345,8 @@ class Modulo2_RegistroCaso:
             raise ValueError("Pretensión no catalogada (Ley 902).")
         if float(datos["cuantia_usd"]) <= 0:
             raise ValueError("La cuantía debe ser mayor que cero.")
-        cid = f"NIC-{datetime.now().year}-{abs(hash(datos['hechos'])) % 100000:05d}"
+        cid = (f"NIC-{datetime.now().year}-"
+               f"{int(hashlib.sha256(datos['hechos'].encode()).hexdigest(), 16) % 100000:05d}")
         return Caso(
             id=cid, pretension=pretension, subtipo=subtipo,
             demandante=datos["demandante"], demandado=datos["demandado"],
