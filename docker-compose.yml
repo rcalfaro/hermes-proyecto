@@ -57,7 +57,11 @@ services:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       # pg_isready como superusuario de la BD: ready = acepta conexiones.
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-gemelo_civil}"]
+      # OJO: $POSTGRES_USER con UN solo $ = expansión DENTRO del contenedor (shell de
+      # postgres), no por compose al parsear. Con ${VAR} compose sustituiría el valor
+      # del .env en tiempo de parseo, y si una shell local lo tiene vacío/erróneo el
+      # healthcheck falla -> db nunca queda healthy -> backend/frontend no arrancan.
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
       interval: 5s
       timeout: 3s
       retries: 10
