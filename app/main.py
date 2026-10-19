@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import logging
 import os
+import uuid
+from datetime import date
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import Any
@@ -35,7 +37,7 @@ from app.application.container import ContenedorDependencias
 from app.application.errors import ErrorAplicacion
 from app.application.unit_of_work import SqlAlchemyUnitOfWork
 from app.auth.security import ConfiguracionJWT, hash_password
-from app.db.base import Base
+from app.db.base import Base, TipoPretension
 from app.db.models import Usuario
 from app.services.calendario_judicial import cargar_calendario_2026
 from app.services.time_provider import SystemClock
@@ -92,23 +94,69 @@ def _preparar_esquema_y_seed(session: Session) -> None:
     ya_existe = session.execute(select(Usuario)).first()
     if ya_existe is not None:
         return  # ya hay usuarios: no re-sembrar (idempotencia).
+    from app.db.base import RolActor
+    from app.db.models import ActorJuridico, Caso, CasoActor, Pretension
+
+    # --- Actores del foro DEMO (ids deterministas: el seed SQL de scripts/
+    #     usa los mismos UUIDs; sin PII real) -------------------------------
+    juez = ActorJuridico(
+        id=uuid.UUID("00000000-0000-0000-0000-00000000d001"),
+        tipo_persona="natural", nombre_razon_social="Dra. Jueza Demo",
+        cedula_ruc="J-DEMO-001", rol_principal=RolActor.JUEZ,
+    )
+    dte = ActorJuridico(
+        id=uuid.UUID("00000000-0000-0000-0000-00000000d002"),
+        tipo_persona="juridica", nombre_razon_social="Inmobiliaria Demo S.A.",
+        cedula_ruc="RUC-DTE-001", rol_principal=RolActor.DEMANDANTE,
+    )
+    ddo = ActorJuridico(
+        id=uuid.UUID("00000000-0000-0000-0000-00000000d003"),
+        tipo_persona="natural", nombre_razon_social="Arrendatario Demo",
+        cedula_ruc="001-250380-1000A", rol_principal=RolActor.DEMANDADO,
+    )
+    session.add_all([juez, dte, ddo])
+
+    # --- Expediente DEMO navegable en el tablero (estado PRESENTADO) --------
+    caso = Caso(
+        numero_expediente="00001-2026-CIV-ORD",
+        tipo_proceso="juicio_ordinario_civil", materia="arrendaticio",
+        juzgado_asignado="Juzgado Civil de Managua",
+        fecha_presentacion_demanda=date.today(), juez_id=juez.id,
+    )
+    session.add(caso)
+    session.flush()  # obtiene caso.id (UUID aleatorio -> se imprime abajo)
+    session.add(Pretension(
+        caso_id=caso.id, codigo_tipo=TipoPretension.DESALOJO, orden=1,
+        descripcion=("Se declare rescindido el contrato de arrendamiento y "
+                     "se ordene la entrega material del inmueble."),
+        es_principal=True,
+    ))
+    session.add_all([
+        CasoActor(caso_id=caso.id, actor_id=dte.id, rol_en_caso=RolActor.DEMANDANTE),
+        CasoActor(caso_id=caso.id, actor_id=ddo.id, rol_en_caso=RolActor.DEMANDADO),
+    ])
+
     demo = [
-        # username, password, rol_sistema — credenciales EXPLÍCITAMENTE demo.
-        ("juez", "demo-juez-2026", "juez"),
-        ("abogado_demandante", "demo-abog-2026", "abogado"),
-        ("abogado_demandado", "demo-abog-2026", "abogado"),
-        ("publico", "demo-publico-2026", "publico"),
+        # username, password, rol_sistema, actor vinculado — credenciales
+        # EXPLÍCITAMENTE demo. El actor_id es lo que Zero Trust sella en cada
+        # comando: el frontend jamás envía identidad.
+        ("juez", "demo-juez-2026", "juez", juez),
+        ("abogado_demandante", "demo-abog-2026", "abogado", dte),
+        ("abogado_demandado", "demo-abog-2026", "abogado", ddo),
+        ("publico", "demo-publico-2026", "publico", None),
     ]
-    for username, password, rol_sistema in demo:
+    for username, password, rol_sistema, actor in demo:
         session.add(
             Usuario(
                 username=username,
                 email=f"{username}@demo.local",
                 password_hash=hash_password(password),
                 rol_sistema=rol_sistema,
+                actor_id=actor.id if actor else None,
             )
         )
     session.commit()
+    log.warning("Expediente DEMO listo para el tablero — UUID: %s", caso.id)
     log.warning(
         "Se sembraron %d cuentas DEMO (login: 'juez' / 'demo-juez-2026'). "
         "Cambiar o desactivar antes de cualquier despliegue real.",
