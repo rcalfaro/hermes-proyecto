@@ -15,7 +15,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api import endpoints, queries
+from app.api import endpoints, insights_endpoints, queries
 from app.application.container import ContenedorDependencias
 from app.application.errors import ErrorAplicacion
 
@@ -41,6 +41,8 @@ def crear_app(contenedor: ContenedorDependencias | None = None) -> FastAPI:
         app.state.contenedor = contenedor
     app.include_router(endpoints.router)
     app.include_router(queries.router)
+    # Fase 8: capa de IA (solo lectura; no toca el flujo transaccional).
+    app.include_router(insights_endpoints.router)
 
     @app.get("/healthz")
     def health() -> dict[str, Any]:
