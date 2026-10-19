@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JUSTICIA-DT Nicaragua — Gemelo Digital de Juicios Civiles (Ley 902)</title>
+<style>
+:root{--bg:#0b1020;--card:#141b31;--acc:#5eead4;--acc2:#fbbf24;--rojo:#f87171;--verde:#34d399;
+--txt:#e5e7eb;--muted:#9ca3af;--line:#243052}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;
+background:linear-gradient(160deg,#0b1020,#101a36);color:var(--txt);min-height:100vh}
+header{padding:22px 28px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:1.5rem}h1 b{color:var(--acc)}
+.sub{color:var(--muted);font-size:.9rem;margin-top:6px}
+nav{display:flex;gap:8px;padding:12px 28px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+nav button{background:var(--card);color:var(--txt);border:1px solid var(--line);padding:8px 14px;
+border-radius:8px;cursor:pointer;font-size:.9rem}
+nav button.on{background:var(--acc);color:#062018;font-weight:700;border-color:var(--acc)}
+main{padding:22px 28px;max-width:1100px;margin:auto}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+.grid{display:grid;gap:12px}.g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.g6{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+.kpi .v{font-size:1.3rem;font-weight:800;color:var(--acc)}.kpi .l{color:var(--muted);font-size:.78rem}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase}
+.bar{height:9px;background:#0e1428;border-radius:6px;overflow:hidden;min-width:90px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),#2dd4bf)}
+input,select,textarea{width:100%;background:#0e1428;border:1px solid var(--line);color:var(--txt);
+padding:9px;border-radius:8px;font:inherit}label{display:block;margin:10px 0 4px;color:var(--muted);font-size:.85rem}
+.btn{background:var(--acc);color:#062018;border:0;padding:11px 18px;border-radius:8px;font-weight:800;cursor:pointer;margin-top:14px}
+.btn.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+.chip{display:inline-block;background:#0e1428;border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:.78rem;margin:3px}
+.nivel{font-weight:800}.verde{color:var(--verde)}.amarillo{color:var(--acc2)}.rojo{color:var(--rojo)}
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.step{background:#0e1428;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:.85rem}
+.arrow{color:var(--acc);font-weight:800}
+footer{color:var(--muted);text-align:center;padding:18px;font-size:.8rem;border-top:1px solid var(--line)}
+.api{font-size:.85rem;color:var(--muted)}code{background:#0e1428;padding:2px 6px;border-radius:5px;color:var(--acc)}
+</style>
+</head>
+<body>
+<header>
+<h1>⚖️ <b>JUSTICIA-DT</b> Nicaragua · Gemelo Digital de Juicios Civiles según la Pretensión</h1>
+<div class="sub">Ley 902 (Procedimientos Civiles) y Código Civil · Datos sintéticos — Fase 1 · Dirigido a abogados y notarios públicos</div>
+</header>
+<nav id="tabs"></nav>
+<main>
+
+<section id="t-arq">
+<div class="card"><h3>Arquitectura (§3.1)</h3>
+<div class="flow">
+<div class="step">🎯 Selección de pretensión<br><small class="api">6 tipos Ley 902</small></div><span class="arrow">→</span>
+<div class="step">🏷️ Subtipo<br><small class="api">13 pretensiones comunes</small></div><span class="arrow">→</span>
+<div class="step">🔀 Escenarios what-if<br><small class="api">10 escenarios</small></div><span class="arrow">→</span>
+<div class="step">📊 Resultados<br><small class="api">éxito · duración · costos</small></div>
+</div></div>
+<div class="card"><h3>Capas del gemelo digital</h3>
+<table><tr><th>Capa</th><th>Componente</th></tr>
+<tr><td>Física (PO)</td><td>Juzgados civiles, expedientes, abogados, notarios</td></tr>
+<tr><td>Comunicación</td><td>NICARAO, SGEAN, firma electrónica (Ley 729)</td></tr>
+<tr><td>Digital (VO)</td><td>Réplica virtual del proceso según pretensión</td></tr>
+<tr><td>Cibernética</td><td>Nube, IA, procesamiento (Monte Carlo, NLP)</td></tr>
+<tr><td>Servicio</td><td>Análisis de escenarios por pretensión</td></tr>
+<tr><td>Visualización</td><td>Este dashboard (FastAPI + HTML/JS)</td></tr></table></div>
+<div class="card"><h3>Núcleo híbrido C1–C5 (§6.1)</h3>
+<span class="chip">C1 Clasificador de pretensión (NLP)</span><span class="chip">C2 Process Mining</span>
+<span class="chip">C3 Simulación de eventos (Monte Carlo)</span><span class="chip">C4 IA predictiva</span>
+<span class="chip">C5 Grafos de conocimiento</span></div>
+<div class="card"><h3>Pretensiones civiles (Ley 902)</h3>
+<table id="tb-pred"><tr><th>Tipo</th><th>Descripción</th><th>Duración típica</th></tr></table></div>
+</section>
+
+<section id="t-mod">
+<div class="card"><h3>9 Módulos (§3.2)</h3>
+<table><tr><th>Módulo</th><th>Funcionalidad</th><th>Endpoint FastAPI</th></tr>
+<tr><td>M1 Selección de pretensión</td><td>Clasificación tipo/subtipo (manual o NLP)</td><td><code>GET /api/catalogo · POST /api/clasificar</code></td></tr>
+<tr><td>M2 Registro de caso</td><td>Partes, cuantía, juzgado, pruebas + hash SHA-256</td><td><code>POST /api/caso</code></td></tr>
+<tr><td>M3 Análisis de viabilidad</td><td>Evaluación preliminar vs casos similares</td><td><code>POST /api/viabilidad</code></td></tr>
+<tr><td>M4 Simulación de escenarios</td><td>What-if Monte Carlo por pretensión</td><td><code>POST /api/escenarios</code></td></tr>
+<tr><td>M5 Predicción de duración</td><td>Tiempos estimados por etapa procesal</td><td><code>POST /api/duracion</code></td></tr>
+<tr><td>M6 Predicción de resultados</td><td>Probabilidad de éxito y ranking</td><td><code>POST /api/resultados</code></td></tr>
+<tr><td>M7 Detección de anomalías</td><td>Alertas de retrasos (verde/amarillo/rojo)</td><td><code>POST /api/anomalias</code></td></tr>
+<tr><td>M8 Dashboard</td><td>Visualización del expediente</td><td><code>GET /</code></td></tr>
+<tr><td>M9 Informe de resultados</td><td>Reporte final + recomendación estratégica</td><td><code>POST /api/flujo_completo · GET /api/informe/{id}</code></td></tr>
+</table></div></section>
+
+<section id="t-flujo">
+<div class="card"><h3>Flujo de uso en 5 pasos (§3.3)</h3>
+<div class="flow">
+<div class="step"><b>1.</b> Abogado selecciona pretensión y subtipo</div><span class="arrow">→</span>
+<div class="step"><b>2.</b> Ingresa datos del caso (partes, hechos, cuantía, juzgado, pruebas)</div><span class="arrow">→</span>
+<div class="step"><b>3.</b> El DT analiza viabilidad según pretensión</div><span class="arrow">→</span>
+<div class="step"><b>4.</b> Simula escenarios what-if</div><span class="arrow">→</span>
+<div class="step"><b>5.</b> DT genera análisis, predicciones y recomendaciones</div></div>
+<p class="api">Todo el flujo se ejecuta con un solo llamado: <code>POST /api/flujo_completo</code></p></div>
+<div class="card"><h3>Etapas procesales por pretensión</h3><div id="flujos"></div></div>
+</section>
+
+<section id="t-caso">
+<div class="card"><h3>🆕 Nuevo caso — análisis interactivo por pretensión</h3>
+<p class="api">Funciona <b>offline en el navegador</b> (motor JS espejo del motor Python). Si abre este dashboard desde el servidor FastAPI (<code>http://127.0.0.1:8000/</code>), puede usar además la API REST en <code>/docs</code>.</p>
+<label>Pretensión (tipo)</label><select id="f-pred"></select>
+<label>Subtipo</label><select id="f-sub"></select>
+<div class="grid g3">
+<div><label>Demandante</label><input id="f-dem" value="Empresa A"></div>
+<div><label>Demandado</label><input id="f-dan" value="Empresa B"></div>
+<div><label>Cuantía (USD)</label><input id="f-cua" type="number" value="50000" min="1"></div>
+</div>
+<div class="grid g3">
+<div><label>Juzgado</label><input id="f-juz" value="Civil de Managua"></div>
+<div><label>Pruebas disponibles</label><select id="f-pru" multiple size="3">
+<option value="documental" selected>Documental</option><option value="testimonial" selected>Testimonial</option><option value="pericial" selected>Pericial</option></select></div>
+<div><label>Hechos (resumen)</label><textarea id="f-hec" rows="3">Falta de pago por prestación de servicios conforme al contrato suscrito.</textarea></div>
+</div>
+<button class="btn" onclick="analizar()">▶ Ejecutar análisis del DT (M1→M9)</button>
+<button class="btn sec" onclick="cargarDemo()">Cargar demo §5</button>
+<div id="res" style="margin-top:18px"></div>
+</div></section>
+
+</main>
+<footer>JUSTICIA-DT Nicaragua v1.0 · Motor Python (app.py) + API FastAPI (server.py) · Herramienta de apoyo con datos sintéticos — no sustituye el criterio profesional.</footer>
+<script>
+"use strict";
+/* ============ CATÁLOGO (espejo de app.py) ============ */
+const PRET={
+declarativa:{nombre:"Declarativa",desc:"Declara existencia/inexistencia de un derecho",rango:"6-12 meses",base:8,comp:"Alta",
+sub:["nulidad","usucapion","prescripcion","reivindicacion","servidumbres"],req:["interes_legitimo","falta_de_prescripcion","validez_del_acto"],
+pruebas:["documental","testimonial","pericial"],etapas:["Demanda","Contestación","Audiencia Inicial","Audiencia Probatoria","Sentencia"]},
+constitutiva:{nombre:"Constitutiva",desc:"Crea, modifica o extingue una relación jurídica",rango:"8-18 meses",base:12,comp:"Media-Alta",
+sub:["divorcio","resolucion_contrato","division_bienes","nulidad_matrimonio"],req:["causales","gravedad","imputabilidad"],
+pruebas:["documental","testimonial","pericial"],etapas:["Demanda","Contestación","Audiencia Inicial","Audiencia Probatoria","Sentencia Constitutiva"]},
+de_condena:{nombre:"De condena",desc:"Condena a dar, hacer o no hacer",rango:"6-15 meses",base:10,comp:"Media-Alta",
+sub:["incumplimiento","cobro_pesos","danos_perjuicios","responsabilidad_civil","arrendamiento","compraventa"],req:["obligacion","incumplimiento","nexo_causal"],
+pruebas:["documental","pericial","testimonial"],etapas:["Demanda","Contestación","Audiencia Inicial","Audiencia Probatoria","Sentencia","Ejecución"]},
+ejecutiva:{nombre:"Ejecutiva",desc:"Ejecuta un título ejecutivo",rango:"3-8 meses",base:5,comp:"Baja",
+sub:["pagare","letra_cambio","hipoteca","sentencia_firme"],req:["titulo_ejecutivo","liquidez","exigibilidad"],
+pruebas:["documental"],etapas:["Demanda","Mandamiento de Ejecución","Embargo","Remate","Pago"]},
+cautelar:{nombre:"Cautelar",desc:"Asegura bienes o derechos durante el proceso",rango:"1-3 meses",base:2,comp:"Baja-Media",
+sub:["embargo","secuestro","anotacion_preventiva"],req:["peligro_demora","apariencia_buen_derecho","contracautela"],
+pruebas:["documental","testimonial"],etapas:["Solicitud","Admisión","Ejecución de la Medida"]},
+probatoria:{nombre:"Probatoria",desc:"Anticipa o asegura prueba",rango:"1-2 meses",base:1,comp:"Baja",
+sub:["inspeccion_judicial","testimonio_anticipado","pericial_anticipada"],req:["urgencia","relevancia","imposibilidad_posterior"],
+pruebas:["documental","testimonial","pericial"],etapas:["Solicitud","Admisión","Producción de Prueba"]}};
+const ESC={base:[1,1,1],allanamiento:[1.3,.38,.42],acuerdo_conciliatorio:[1.18,.45,.55],reconvencion:[.86,1.5,1.6],
+excepciones_previas:[.92,1.25,1.3],prorroga:[.96,1.2,1.1],apelacion:[.78,2.25,2.4],incidente_probatorio:[.9,1.35,1.45],
+recusacion:[.88,1.3,1.25],nulidad_actuaciones:[.72,1.8,1.9]};
+/* RNG determinista mulberry32 (estable entre sesiones) */
+function seed(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=h<<13|h>>>19;}return h>>>0}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gam1(rng,k){const d=k-1/3,c=1/Math.sqrt(9*d);for(;;){let x,v;do{x=rng()*2-1;v=1+c*x;x=x*x}while(v<=0);
+v=v*v*v;const u=rng();if(u<1-.0331*x*x||Math.log(u)>.5*x+x*(1-v)+d*(1-v+Math.log(v))){let e=rng();while(e<=0)e=rng();return d*v-Math.log(e)}}}
+function betaMean(p,rng,n){const a=Math.max(.5,p*8),b=Math.max(.5,(1-p)*8);let s=0;
+for(let i=0;i<n;i++){const g1=gam1(rng,a),g2=gam1(rng,b);s+=Math.min(.99,Math.max(.01,g1/(g1+g2)))}
+return Math.min(.99,Math.max(.01,s/n))}
+function gammaMean(mu,rng,n,k){k=k||6;const sc=mu/k;let s=0;for(let i=0;i<n;i++)s+=gam1(rng,k)*sc;return s/n}
+/* ============ MÓDULOS JS (espejo de app.py) ============ */
+function m3(caso){const p=PRET[caso.pretension];
+const ok=p.pruebas.filter(x=>caso.pruebas.includes(x)).length/p.pruebas.length;
+const hec=caso.hechos.length>=20?1:.5;
+const pen={"Baja":.05,"Media":0,"Media-Alta":-.03,"Alta":-.05,"Baja-Media":.02}[p.comp]||0;
+const sc=Math.min(1,Math.max(.05,.35+.3*ok+.2*hec+.1+pen));
+return{score:+sc.toFixed(2),veredicto:sc>=.6?"Viable":sc>=.4?"Viable con observaciones":"Riesgo alto",
+obstaculos:ok<1?["Faltan medios de prueba sugeridos para esta pretensión"]:[]}}
+function m4(caso,viab){const p=PRET[caso.pretension],mb=p.base;
+const cb=Math.round((500+.1*Math.min(caso.cuantia,1e5)+400*mb),-1);
+const sem=seed(caso.expediente+"|"+caso.subtipo);const out=[];
+for(const[e,[fe,fd,fc]]of Object.entries(ESC)){
+const pb=Math.min(.95,Math.max(.05,viab.score*fe));
+const ex=Math.round(betaMean(pb,mulberry(seed("exito:"+sem+e)),200)*100);
+const me=+(gammaMean(mb*fd,mulberry(seed("dur:"+sem+e)),200)).toFixed(1);
+const co=Math.round(cb*fc*(.9+.2*(me/mb)/2));
+out.push({escenario:e,exito_pct:ex,meses:me,costo_usd:co})}
+out.sort((a,b)=>b.exito_pct-a.exito_pct||a.meses-b.meses);return{esc:out,cb}}
+function m5(caso){const p=PRET[caso.pretension],et=p.etapas;
+const w=[.1,.15,.15,.35,.15,.1].slice(0,et.length);const s=w.reduce((a,b)=>a+b,0);
+const rng=mulberry(seed("etapas:"+caso.expediente));let tot=0;
+const filas=et.map((n,i)=>{const m=Math.round(p.base*(w[i]/s)*(0.92+0.16*rng())*2)/2;tot+=m;return{etapa:n,meses:m}});
+return{filas,total:+tot.toFixed(1)}}
+function expId(caso){let h=0;const s=JSON.stringify(caso);
+for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;
+return"NIC-2026-"+String(h%99999).padStart(5,"0")}
+function hash16(s){let h1=0xdeadbeef,h2=0x41c6ce57;
+for(let i=0;i<s.length;i++){const c=s.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677)}
+return((h1>>>0).toString(16)+(h2>>>0).toString(16)).slice(0,16)}
+function analizar(){
+const sel=document.getElementById("f-pred").value;
+const caso={pretension:sel,subtipo:document.getElementById("f-sub").value,
+demandante:document.getElementById("f-dem").value||"Demandante",
+demandado:document.getElementById("f-dan").value||"Demandado",
+cuantia:+document.getElementById("f-cua").value||1,
+juzgado:document.getElementById("f-juz").value||"Civil de Managua",
+pruebas:[...document.getElementById("f-pru").selectedOptions].map(o=>o.value),
+hechos:document.getElementById("f-hec").value};
+caso.expediente=expId(caso);caso.hash=hash16(JSON.stringify(caso));
+const v=m3(caso),m4r=m4(caso,v),d=m5(caso);
+const esc=m4r.esc,mejor=esc[0],base=esc.find(e=>e.escenario==="base")||mejor;
+const rec=`Para la pretensión de ${caso.subtipo.replace(/_/g,' ')}, se recomienda explorar el escenario '<b>${mejor.escenario}</b>' (éxito ${mejor.exito_pct}%, ${mejor.meses} meses, USD ${mejor.costo_usd.toLocaleString()}). Evite incidencias que prolonguen el juicio; acredite los requisitos: ${PRET[sel].req.join(', ')}.`;
+document.getElementById("res").innerHTML=`
+<div class="grid g6">
+<div class="kpi"><div class="v">${caso.expediente}</div><div class="l">Expediente · Hash ${caso.hash.slice(0,8)}</div></div>
+<div class="kpi"><div class="v">${Math.round(v.score*100)}%</div><div class="l">Viabilidad · ${v.veredicto}</div></div>
+<div class="kpi"><div class="v">${d.total} m</div><div class="l">Duración total estimada</div></div>
+<div class="kpi"><div class="v">${mejor.exito_pct}%</div><div class="l">Mejor escenario (${mejor.escenario})</div></div>
+<div class="kpi"><div class="v">USD ${base.costo_usd.toLocaleString()}</div><div class="l">Costo escenario base</div></div>
+<div class="kpi"><div class="v nivel verde">OK</div><div class="l">Motor local · M1→M9</div></div></div>
+<div class="card"><h4>Escenarios what-if (M4/M6)</h4><table><tr><th>Escenario</th><th>Éxito</th><th></th><th>Meses</th><th>Costo USD</th></tr>
+${esc.map(e=>`<tr><td>${e.escenario}</td><td><b>${e.exito_pct}%</b></td><td><div class="bar"><i style="width:${e.exito_pct}%"></i></div></td><td>${e.meses}</td><td>${e.costo_usd.toLocaleString()}</td></tr>`).join("")}</table></div>
+<div class="card"><h4>Duración por etapa (M5)</h4><table>${d.filas.map(f=>`<tr><td>${f.etapa}</td><td>${f.meses} meses</td></tr>`).join("")}<tr><th>TOTAL</th><th>${d.total} meses</th></tr></table></div>
+<div class="card"><h4>Recomendación estratégica (M9)</h4><p>${rec}</p></div>`}
+function cargarDemo(){document.getElementById("f-pred").value="de_condena";fillSub("incumplimiento");
+document.getElementById("f-dem").value="Empresa A";document.getElementById("f-dan").value="Empresa B";
+document.getElementById("f-cua").value=50000;document.getElementById("f-juz").value="Civil de Managua";
+document.getElementById("f-hec").value="Falta de pago por prestación de servicios conforme al contrato suscrito.";analizar()}
+/* ============ UI ============ */
+const TABS=[["t-arq","🏛️ Arquitectura"],["t-mod","🧩 9 Módulos"],["t-flujo","🔁 Flujo de Uso"],["t-caso","📝 Nuevo Caso"]];
+const nav=document.getElementById("tabs");
+TABS.forEach(([id,lbl],i)=>{const b=document.createElement("button");b.textContent=lbl;b.className=i===0?"on":"";
+b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("on"));
+document.querySelectorAll("main section").forEach(x=>x.classList.remove("on"));b.classList.add("on");
+document.getElementById(id).classList.add("on")};nav.appendChild(b)});
+document.getElementById("t-arq").classList.add("on");
+const tb=document.querySelector("#tb-pred");
+Object.values(PRET).forEach(p=>{const tr=document.createElement("tr");
+tr.innerHTML=`<td><b>${p.nombre}</b></td><td>${p.desc}</td><td>${p.rango}</td>`;tb.appendChild(tr)});
+document.getElementById("flujos").innerHTML=Object.values(PRET).map(p=>
+`<p><b>${p.nombre}:</b> ${p.etapas.join(" → ")}</p>`).join("");
+const fp=document.getElementById("f-pred"),fs=document.getElementById("f-sub");
+fp.innerHTML=Object.entries(PRET).map(([k,v])=>`<option value="${k}">${v.nombre}</option>`).join("");
+function fillSub(sel){fs.innerHTML=PRET[fp.value].sub.map(s=>`<option ${s===sel?"selected":""}>${s}</option>`).join("")}
+fp.onchange=()=>fillSub();fillSub("incumplimiento");
+</script>
+</body>
+</html>

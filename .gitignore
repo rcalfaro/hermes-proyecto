@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Entorno / IDE
+.env
+.idea/
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Generados localmente (el ZIP incluye una copia de referencia)
+justicia_dt/informe_demo.json
+
+# Paquetes generados
+*.zip
