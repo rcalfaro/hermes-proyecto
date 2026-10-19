@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke:ssr": "vite build --mode ssr && node .smoke/ssr-smoke.js"
   },
   "dependencies": {
     "@xyflow/react": "^12.3.5",
