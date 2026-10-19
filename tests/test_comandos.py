@@ -80,8 +80,19 @@ def fixture_client(contenedor) -> TestClient:
     return TestClient(crear_app(contenedor))
 
 
+_SEMILLA_SEQ = 0
+
+
 def _semilla(uow_factory, *, estado=EstadoProcesal.PRESENTADO) -> dict[str, uuid.UUID]:
-    """Crea juez, demandante, demandado y expediente precargado."""
+    """Crea juez, demandante, demandado y expediente precargado.
+
+    Usa identificadores ÚNICOS por llamada (secuencia global): cedula_ruc y
+    numero_expediente tienen restricción UNIQUE en el esquema compartido del
+    fixture, y varios tests siembran más de un expediente en la misma BD.
+    """
+    global _SEMILLA_SEQ
+    _SEMILLA_SEQ += 1
+    n = _SEMILLA_SEQ
     ids = {k: uuid.uuid4() for k in ("caso", "juez", "demandante", "demandado")}
     # uow_factory YA produce un UoW envuelto (convención del grafo DI).
     with uow_factory() as uow:
@@ -90,25 +101,25 @@ def _semilla(uow_factory, *, estado=EstadoProcesal.PRESENTADO) -> dict[str, uuid
             tipo_persona="natural",
             nombre_razon_social="Dra. Sinergia",
             rol_principal=RolActor.JUEZ,
-            cedula_ruc="J-001",
+            cedula_ruc=f"J-{n:03d}",
         )
         dte = ActorJuridico(
             id=ids["demandante"],
             tipo_persona="juridica",
             nombre_razon_social="Inmobiliaria X LTDA",
             rol_principal=RolActor.DEMANDANTE,
-            cedula_ruc="RUC-DTE",
+            cedula_ruc=f"RUC-DTE-{n:03d}",
         )
         ddo = ActorJuridico(
             id=ids["demandado"],
             tipo_persona="natural",
             nombre_razon_social="B. Pérez",
             rol_principal=RolActor.DEMANDADO,
-            cedula_ruc="CED-DDO",
+            cedula_ruc=f"CED-DDO-{n:03d}",
         )
         caso = Caso(
             id=ids["caso"],
-            numero_expediente="001-2026-CIV-ORD",
+            numero_expediente=f"{n:05d}-2026-CIV-ORD",
             tipo_proceso="juicio_ordinario_civil",
             materia="desalojo",
             juzgado_asignado="Juzgado Civil Managua",
@@ -156,40 +167,30 @@ def _semilla(uow_factory, *, estado=EstadoProcesal.PRESENTADO) -> dict[str, uuid
 
 
 def test_presentar_demanda_valida_deja_el_caso_para_admision(client, contenedor):
-    """Demanda bien formada ⇒ PRESENTADO (calificación, Arts. 146-148 CPCN)."""
+    """Demanda bien formada ⇒ alta del expediente en PRESENTADO (Arts. 37,
+    146-148 CPCN: promoción con calificación de admisión pendiente)."""
     with contenedor.uow_factory() as uow:
         juez = ActorJuridico(
             id=uuid.uuid4(),
             tipo_persona="natural",
             nombre_razon_social="Juez Sorteador",
             rol_principal=RolActor.JUEZ,
+            cedula_ruc="J-SORTEO-900",
         )
         dte = ActorJuridico(
             id=uuid.uuid4(),
             tipo_persona="natural",
             nombre_razon_social="Ana Demandante",
             rol_principal=RolActor.DEMANDANTE,
+            cedula_ruc="CED-ANA-900",
         )
-        caso = Caso(
-            id=uuid.uuid4(),
-            numero_expediente="002-2026-CIV-ORD",
-            tipo_proceso="juicio_ordinario_civil",
-            materia="cobro",
-            juzgado_asignado="Juzgado 1 Civil",
-            etapa_actual=EtapaProcesal.CALIFICACION_DEMANDA,
-            estado_actual=EstadoProcesal.BORRADOR,
-            fecha_presentacion_demanda=date(2026, 3, 2),
-            juez_id=juez.id,
-        )
-        uow.session.add_all([juez, dte, caso])
+        uow.session.add_all([juez, dte])
         uow.session.flush()
-        caso.intervenciones.append(
-            CasoActor(caso_id=caso.id, actor_id=dte.id, rol_en_caso=RolActor.DEMANDANTE)
-        )
-        caso_id, actor_id = caso.id, dte.id
+        caso_id, actor_id = uuid.uuid4(), dte.id
 
-    # Alta desde borrador (Art. 37 CPCN) + verificación de la admisión
-    # por auto iniciado del juez (Art. 148 CPCN):
+    # Alta del expediente vía comando (Art. 37 CPCN: el propio acto procesal
+    # crea el caso en PRESENTADO) + verificación de la admisión por auto
+    # iniciado del juez (Art. 148 CPCN):
     comando = {
         "caso_id": str(caso_id),
         "actor_id": str(actor_id),
@@ -251,8 +252,13 @@ def test_contestar_fuera_de_plazo_es_rechazado_409(
 
     # Rebobinar para probar el vencimiento: caso de nuevo en admitida.
     ids2 = _semilla(uow_factory, estado=EstadoProcesal.ADMITIDA)
-    contenedor.registro_plazos.abrir(ids2["caso"], "contestacion_demanda", computo)
-    clock.advance_to(computo.vencimiento_datetime.replace(microsecond=0))
+    # Computo propio para el segundo expediente (los plazos se indexan por
+    # nombre y cada caso debe llevar SU vencimiento).
+    computo2 = contenedor.servicio_plazos().calcular_vencimiento(
+        date(2026, 3, 2), 10, TipoPlazo.PRECLUSIVO
+    )
+    contenedor.registro_plazos.abrir(ids2["caso"], "contestacion_demanda", computo2)
+    clock.advance_to(computo2.vencimiento_datetime.replace(microsecond=0))
     clock.advance_by(timedelta(seconds=1))
     cmd2 = ContestarDemandaCommand(
         caso_id=ids2["caso"],
@@ -413,7 +419,10 @@ def test_apelar_dentro_del_quinto_dia_y_preclusion_posterior(
 
     # Nuevo caso sentenciado sin plazo vigente (vencido/interrumpido):
     ids2 = _semilla(uow_factory, estado=EstadoProcesal.SENTENCIADO)
-    plazo_vencido = nuevo_plazo(ids2["caso"], "termino_apelacion", computo)
+    computo2 = contenedor.servicio_plazos().calcular_vencimiento(
+        date(2026, 3, 2), 5, TipoPlazo.PRECLUSIVO
+    )
+    plazo_vencido = nuevo_plazo(ids2["caso"], "termino_apelacion", computo2)
     from app.services.plazo_service import EstadoPlazo
 
     plazo_vencido.estado = EstadoPlazo.VENCIDO

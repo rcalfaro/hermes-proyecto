@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.api.endpoints import obtener_contenedor
@@ -42,6 +42,10 @@ class EstadoCasoDTO(BaseModel):
 
 
 class PretensionDTO(BaseModel):
+    """Petitum del expediente; ORM→DTO directo (convención from_attributes)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     codigo_tipo: str
     orden: int
     descripcion: str

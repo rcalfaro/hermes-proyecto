@@ -37,8 +37,20 @@ from app.application.errors import (
     PlazoPrecluido,
 )
 from app.application.unit_of_work import SqlAlchemyUnitOfWork
-from app.db.base import AccionAuditoria, EstadoProcesal, RolActor, TipoResolucion
-from app.db.models import Caso, Pretension, ResolucionJudicial, TransicionEstado
+from app.db.base import (
+    AccionAuditoria,
+    EstadoProcesal,
+    EtapaProcesal,
+    RolActor,
+    TipoResolucion,
+)
+from app.db.models import (
+    Caso,
+    CasoActor,
+    Pretension,
+    ResolucionJudicial,
+    TransicionEstado,
+)
 from app.engine.flow_engine import CaseFlowEngine, Disparador
 from app.services.plazo_service import EstadoPlazo, PlazoProcesal
 
@@ -94,6 +106,12 @@ class BaseHandler:
                 para actos que emiten resolución judicial.
         """
         with self._uow_factory() as uow:
+            if self.alta_desde_comando:
+                # Alta del expediente: el propio comando crea el Caso y lo
+                # deja en su estado inicial PRESENTADO (Arts. 37/146 CPCN).
+                # No hay transición previa que validar; la auditoría registra
+                # la creación con su fundamento normativo explícito.
+                return self._manejar_alta(uow, comando, accion_specificas)
             caso = uow.cargar_caso(comando.caso_id)
             actor = uow.cargar_actor(comando.actor_id)
             self._verificar_legitimacion(comando, actor, caso)
@@ -170,6 +188,79 @@ class BaseHandler:
             )
 
     # ------------------------------------------------------------ auxiliares
+    #: Actos de ALTA (crear expediente): True en PresentarDemandaHandler.
+    #: El resto de actos procesales operan sobre un caso ya existente.
+    alta_desde_comando: bool = False
+
+    def _fundamento_alta(self, comando: Any) -> str:
+        """Fundamento legal del acto de alta (sobrescríbalo por handler)."""
+        raise NotImplementedError
+
+    def _crear_caso_desde_comando(
+        self, uow: SqlAlchemyUnitOfWork, comando: Any
+    ) -> tuple[Caso, Any]:
+        """Crea el expediente en PRESENTADO a partir del comando de alta."""
+        raise NotImplementedError
+
+    def _manejar_alta(
+        self,
+        uow: SqlAlchemyUnitOfWork,
+        comando: ComandoBase,
+        accion_specificas: Any,
+    ) -> ResultadoComando:
+        """Ejecuta el ciclo de ALTA bajo una sola transacción atómica.
+
+        Efectos: creación del Caso (estado inicial PRESENTADO, calificación
+        pendiente — Art. 148 CPCN), efectos específicos del acto (registro de
+        pretensiones, vinculación de partes) y evento inmutable al
+        LogAuditoria con fundamento legal. Devuelve ``estado_anterior=None``
+        porque no existe estado previo: el expediente nace aquí.
+        """
+        actor_objeto: Any = None
+        if getattr(comando, "actor_id", None) is not None:
+            actor_objeto = uow.cargar_actor(comando.actor_id)
+        caso, actor_objeto = self._crear_caso_desde_comando(uow, comando)
+
+        extras: dict[str, Any] = {}
+        ids: dict[str, str] = {"caso": str(caso.id)}
+        if accion_specificas is not None:
+            extras = accion_specificas(uow, caso) or {}
+        ids.update(extras.pop("ids", {}))
+
+        fundamento = self._fundamento_alta(comando)
+        detalle: dict[str, Any] = {
+            "acto": self.disparador.value,
+            "actor": getattr(actor_objeto, "nombre_razon_social", None),
+            "rol": comando.rol_actor.value,
+            "fecha_acto": self._clock.now().isoformat(),
+            "fundamento_legal": fundamento,
+            "estado_resultante": caso.estado_actual.value,
+            "etapa_resultante": (
+                caso.etapa_actual.value if caso.etapa_actual else None
+            ),
+        }
+        detalle.update(extras)
+        uow.registrar_auditoria(
+            caso_id=caso.id,
+            accion=self.accion.value,
+            entidad_afectada="caso",
+            registro_id=str(caso.id),
+            actor_id=getattr(comando, "actor_id", None),
+            estado_antes=None,
+            estado_despues=caso.estado_actual.value,
+            detalle=detalle,
+        )
+        return ResultadoComando(
+            caso_id=caso.id,
+            estado_anterior=None,
+            estado_resultante=caso.estado_actual.value,
+            etapa_resultante=(caso.etapa_actual.value if caso.etapa_actual else ""),
+            accion_auditoria=self.accion.value,
+            fundamento_legal=fundamento,
+            timestamp=self._clock.now().isoformat(),
+            id_registros=ids,
+        )
+
     @staticmethod
     def _verificar_legitimacion(comando: ComandoBase, actor: Any, caso: Caso) -> None:
         """RBAC de superficie: el rol declarado debe coincidir con el registrado.
@@ -230,10 +321,22 @@ class RegistroPlazos:
         return self._almacen.get(caso_id, [])
 
     def abrir(self, caso_id: uuid.UUID, nombre: str, computo: Any) -> PlazoProcesal:
+        """Registra el cómputo de un plazo para el expediente (idempotente).
+
+        Si ya existe un plazo CORRIENTE con el mismo nombre (p. ej. al
+        rehacer un cómputo tras una interrupción, Art. 137 CPCN), se
+        reemplaza en lugar de acumular duplicados — un acto procesal tiene
+        UN solo plazo vigente por nombre.
+        """
         from app.services.plazo_service import nuevo_plazo
 
         plazo = nuevo_plazo(caso_id, nombre, computo)
-        self._almacen.setdefault(caso_id, []).append(plazo)
+        lista = self._almacen.setdefault(caso_id, [])
+        for i, existente in enumerate(lista):
+            if existente.nombre == nombre and existente.estado is EstadoPlazo.CORRIENTE:
+                lista[i] = plazo
+                return plazo
+        lista.append(plazo)
         return plazo
 
     def cerrar_vigente(self, caso_id: uuid.UUID, nombre: str) -> None:
@@ -247,13 +350,17 @@ class RegistroPlazos:
 class PresentarDemandaHandler(BaseHandler):
     """Promoción del juicio ordinario civil (Arts. 37, 146-147 CPCN).
 
-    Efectos: alta del expediente (o subsanación del inadmisible reformable),
-    registro de las pretensiones deducidas —el ADN del proceso— y vinculación
-    de las partes. El caso queda PRESENTADO para calificación (Art. 148 CPCN).
+    Acto de ALTA: crea el expediente directamente en estado PRESENTADO
+    (calificación pendiente, Art. 148 CPCN), registra las pretensiones
+    deducidas —el ADN del proceso— y vincula al promovente como parte.
+    No hay transición previa que validar porque el caso nace con el acto;
+    la subsanación de una demanda INADMISIBLE_REFORMABLE se modela
+    presentando de nuevo sobre el mismo expediente ya creado.
     """
 
     disparador = Disparador.PRESENTAR_DEMANDA
     accion = AccionAuditoria.PRESENTACION_ESCRITO
+    alta_desde_comando = True
 
     def manejar(self, comando: PresentarDemandaCommand) -> ResultadoComando:
         self._comando_en_curso = comando
@@ -261,6 +368,68 @@ class PresentarDemandaHandler(BaseHandler):
             return self._manejar_transicion(comando, accion_specificas=self._efectos)
         finally:
             del self._comando_en_curso
+
+    # ------------------------------------------------------------- alta
+    def _fundamento_alta(self, comando: Any) -> str:
+        extra = (
+            f" | Invocado: {comando.fundamento_legal}."
+            if getattr(comando, "fundamento_legal", None)
+            else ""
+        )
+        return (
+            "Arts. 37 y 146 CPCN: promoción de la demanda; "
+            "Art. 148 CPCN: calificación de admisión pendiente." + extra
+        )
+
+    def _crear_caso_desde_comando(
+        self, uow: SqlAlchemyUnitOfWork, comando: Any
+    ) -> tuple[Caso, Any]:
+        """Alta atómica del expediente en PRESENTADO (Art. 148: calificación)."""
+        actor = uow.cargar_actor(comando.actor_id)
+        rol = comando.rol_actor
+        if rol not in (RolActor.DEMANDANTE, RolActor.APODERADO_JUDICIAL_DEMANDANTE):
+            raise ErrorPermisoProcesal(
+                f"El rol '{rol.value}' no está legitimado para promover la "
+                "demanda (legitimación, Arts. 37 y 39 CPCN)."
+            )
+        numero = self._generar_numero_expediente(uow, comando)
+        caso = Caso(
+            id=comando.caso_id,
+            numero_expediente=numero,
+            tipo_proceso=comando.tipo_proceso,
+            materia=comando.materia,
+            juzgado_asignado=comando.juzgado_asignado,
+            etapa_actual=EtapaProcesal.CALIFICACION_DEMANDA,
+            estado_actual=EstadoProcesal.PRESENTADO,
+            cuantia=comando.cuantia,
+            fecha_presentacion_demanda=comando.fecha_presentacion,
+        )
+        uow.session.add(caso)
+        uow.session.flush()
+        uow.session.add(
+            CasoActor(
+                caso_id=caso.id, actor_id=actor.id, rol_en_caso=rol
+            )
+        )
+        uow.session.flush()
+        return caso, actor
+
+    @staticmethod
+    def _generar_numero_expediente(
+        uow: SqlAlchemyUnitOfWork, comando: Any
+    ) -> str:
+        """Número único provisional de expediente (reemplazable por el real
+        asignado por el sistema de gestión judicial)."""
+        from sqlalchemy import func, select
+
+        existente = uow.session.scalar(
+            select(Caso.numero_expediente).where(Caso.id == comando.caso_id)
+        )
+        if existente:
+            return str(existente)
+        secuencia = (uow.session.scalar(select(func.count(Caso.id))) or 0) + 1
+        anio = comando.fecha_presentacion.year
+        return f"{secuencia:05d}-{anio}-CIV-ORD"
 
     def _efectos(self, uow: SqlAlchemyUnitOfWork, caso: Caso) -> dict[str, Any]:
         comando: PresentarDemandaCommand = self._comando_en_curso

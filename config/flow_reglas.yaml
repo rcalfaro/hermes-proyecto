@@ -2,12 +2,10 @@
 # Cargado por app.engine.flow_engine.CaseFlowEngine.desde_yaml().
 # roles_autorizados usa los valores del enum RolActor (terminología civil).
 transiciones:
-  - estado_desde: borrador
-    disparador: presentar_demanda
-    estado_hacia: presentado
-    etapa_hacia: calificacion_demanda
-    roles_autorizados: [demandante, apoderado_judicial_demandante]
-    requisito_normativo: "Arts. 37 y 146 CPCN: promoción de la demanda."
+  # PRESENTADO es el punto de entrada canónico del juicio: PresentarDemanda-
+  # Command crea el expediente directamente en ese estado (alta + pretensiones
+  # + partes en una sola transacción), por lo que BORRADOR queda reservado a
+  # borradores de escritorio sin efectos procesales (no transiciona).
   - estado_desde: presentado
     disparador: demanda_admitida
     estado_hacia: admitida

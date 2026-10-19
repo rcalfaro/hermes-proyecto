@@ -100,14 +100,27 @@ class CaseFlowEngine:
     """Máquina de estados cargada desde YAML; valida y ejecuta transiciones."""
 
     def __init__(self, reglas: list[ReglaFlujo]) -> None:
+        # Índice canónico (estado, disparador): los disparadores son actos
+        # deterministas — un acto procesal no puede tener dos destinos desde
+        # el mismo estado (bifurcaciones como "admitir vs. inadmitir" se
+        # modelan con disparadores DISTINTOS: demanda_admitida /
+        # declarar_inadmisible).
         self._reglas: dict[tuple[EstadoProcesal, Disparador], ReglaFlujo] = {}
         for regla in reglas:
-            # El par (estado, disparador) NO es único en el proceso real: la
-            # calificación de admisión bifurca (auto iniciado vs. inadmisible
-            # reformable). Se indexa además por el estado destino.
-            clave = (regla.estado_desde, regla.disparador, regla.estado_hacia)
+            clave = (regla.estado_desde, regla.disparador)
             if clave in self._reglas:
-                raise ValueError(f"Regla duplicada para {clave}.")
+                existente = self._reglas[clave]
+                if (
+                    existente.estado_hacia is not regla.estado_hacia
+                    or existente.etapa_hacia is not regla.etapa_hacia
+                ):
+                    raise ValueError(
+                        f"Conflicto de reglas para {clave}: destinos "
+                        f"{existente.estado_hacia.value} vs {regla.estado_hacia.value}. "
+                        "Modele la bifurcación con disparadores distintos."
+                    )
+                # Duplicado idéntico: tolerante (catálogos redundantes).
+                continue
             self._reglas[clave] = regla
 
     # ------------------------------------------------------------------ carga
