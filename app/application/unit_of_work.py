@@ -45,6 +45,22 @@ class SqlAlchemyUnitOfWork:
             self.session.commit()
         self.session.close()
 
+    # ------------------------------------------------- paso al frente (Session)
+    # El UoW expone la API de escritura que usan handlers y tests sin forzar a
+    # todos a acceder a `uow.session` (Law of Demeter): el agregado se persiste
+    # dentro de la transacción del comando, no a través de la sesión cruda.
+    def add(self, objeto: Any) -> None:
+        """Registra una entidad nueva en la transacción actual."""
+        self.session.add(objeto)
+
+    def add_all(self, objetos: Any) -> None:
+        """Registra un iterable de entidades en la transacción actual."""
+        self.session.add_all(list(objetos))
+
+    def flush(self) -> None:
+        """Envía los pendings a la BD (para obtener PKs) sin cerrar tx."""
+        self.session.flush()
+
     # ------------------------------------------------------------ repositorios
     def cargar_caso(self, caso_id: uuid.UUID) -> Caso:
         """Carga el expediente completo o lanza ``CasoNoEncontrado``."""

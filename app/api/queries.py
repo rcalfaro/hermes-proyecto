@@ -89,8 +89,14 @@ class SimulacionPublicaDTO(BaseModel):
 
 
 def _uow(request: Request) -> SqlAlchemyUnitOfWork:
+    """La convención del contenedor es que ``uow_factory`` YA devuelve un UoW
+    envuelto; aquí solo se obtiene la instancia (no re-envolver)."""
     contenedor = obtener_contenedor(request)
-    return SqlAlchemyUnitOfWork(contenedor.uow_factory)
+    uow = contenedor.uow_factory()
+    assert isinstance(uow, SqlAlchemyUnitOfWork), (
+        "uow_factory debe producir SqlAlchemyUnitOfWork (ver container)."
+    )
+    return uow
 
 
 router = APIRouter(prefix="/api", tags=["consultas"])

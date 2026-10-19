@@ -206,8 +206,23 @@ def obtener_session_auth(request: Request) -> Iterator[Session]:
     Es una sesión de LECTURA para autenticación; las mutaciones transaccionales
     siguen viviendo en la Unit of Work de los handlers CQRS.
     """
-    contenedor = request.app.state.contenedor
-    session = contenedor.uow_factory()
+    # La sesión de auth es de LECTURA pura: se toma la Session cruda del
+    # motor (no la Unit of Work transaccional de los handlers CQRS).
+    engine = getattr(request.app.state, "engine", None)
+    if engine is not None:
+        from sqlalchemy.orm import Session as _S
+
+        session = _S(engine)
+    else:
+        # Compatibilidad: algún entorno alternativo registró una fábrica de
+        # sesiones plana en app.state.session_factory.
+        factory = getattr(request.app.state, "session_factory", None)
+        if factory is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="El servidor no tiene configurada la sesión de autenticación.",
+            )
+        session = factory()
     try:
         yield session
     finally:

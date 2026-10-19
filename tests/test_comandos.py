@@ -61,7 +61,9 @@ def fixture_uow_factory():
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    yield sessionmaker(bind=engine, expire_on_commit=False)
+    sesion_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    # Convención DI: la fábrica produce UoW ya envuelto (idéntico a producción).
+    yield lambda: SqlAlchemyUnitOfWork(sesion_factory)
     engine.dispose()
 
 
@@ -81,7 +83,8 @@ def fixture_client(contenedor) -> TestClient:
 def _semilla(uow_factory, *, estado=EstadoProcesal.PRESENTADO) -> dict[str, uuid.UUID]:
     """Crea juez, demandante, demandado y expediente precargado."""
     ids = {k: uuid.uuid4() for k in ("caso", "juez", "demandante", "demandado")}
-    with SqlAlchemyUnitOfWork(uow_factory) as uow:
+    # uow_factory YA produce un UoW envuelto (convención del grafo DI).
+    with uow_factory() as uow:
         juez = ActorJuridico(
             id=ids["juez"],
             tipo_persona="natural",
@@ -443,7 +446,7 @@ def test_ejecucion_sobre_sentencia_no_firme_es_409(contenedor, uow_factory):
 def test_ejecucion_sobre_sentencia_firme_procede(contenedor, uow_factory):
     """Arts. 258/263 CPCN: con ejecutoria y condena estimatoria, el apremio avanza."""
     ids = _semilla(uow_factory, estado=EstadoProcesal.FIRME)
-    with SqlAlchemyUnitOfWork(contenedor.uow_factory) as uow:
+    with contenedor.uow_factory() as uow:  # factory ya produce UoW envuelto
         pret = uow.session.get(Pretension, ids["pretension"])
         pret.resuelta = True
         pret.sentido_fallo = SentidoFallo.CON_LUGAR
