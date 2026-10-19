@@ -105,7 +105,7 @@ jobs:
         run: npm run build
 
       - name: Smoke test SSR del tablero (sin navegador)
-        run: npm run smoke:ssr --if-present
+        run: npm run smoke:ssr
 
   # ---------------------------------------------------------------------------
   # JOB 3 · Infraestructura: valida que las imágenes construyen (smoke de release)
