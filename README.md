@@ -63,18 +63,18 @@ healthchecks: **PostgreSQL → Redis → FastAPI (hot-reload) → Frontend**.
 
 ```bash
 docker compose ps                      # todo "running (healthy)"
-curl http://localhost:8000/healthz     # {"estado":"ok","dominio":"proceso_civil_nicaragua"}
+curl http://localhost:${BACKEND_PORT:-8000}/healthz     # {"estado":"ok","dominio":"proceso_civil_nicaragua"}
 ```
 
 | Servicio            | URL                          | Notas                                   |
 |---------------------|------------------------------|-----------------------------------------|
-| Tablero del caso    | http://localhost:3000        | SPA; proxy interno `/api/*` → backend   |
-| API docs (Swagger)  | http://localhost:8000/docs   | Comandos CQRS + queries + auth          |
-| Health API          | http://localhost:8000/healthz| Usado por el healthcheck del compose    |
+| Tablero del caso    | http://localhost:${FRONTEND_PORT:-3000}        | SPA; proxy interno `/api/*` → backend   |
+| API docs (Swagger)  | http://localhost:${BACKEND_PORT:-8000}/docs   | Comandos CQRS + queries + auth          |
+| Health API          | http://localhost:${BACKEND_PORT:-8000}/healthz| Usado por el healthcheck del compose    |
 | PostgreSQL          | 127.0.0.1:5432               | Solo loopback (no expuesto a la LAN)    |
 | Redis               | 127.0.0.1:6379               | Solo loopback                           |
 
-Ruta principal del tablero: `http://localhost:3000/caso/<uuid>` (deep-link
+Ruta principal del tablero: `http://localhost:${FRONTEND_PORT:-3000}/caso/<uuid>` (deep-link
 resuelto por el fallback SPA de Nginx/Vite).
 
 ### 5. Ciclo de desarrollo diario
