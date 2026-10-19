@@ -737,6 +737,45 @@ class LogAuditoria(Base):
         )
 
 
+class Usuario(TimestampMixin, Base):
+    """Cuenta de acceso al sistema (identidad digital de un actor del foro).
+
+    Zero Trust: el JWT lleva ``sub = usuario.id``; la BD es la única fuente
+    de verdad que vincula esa cuenta con el **ActorJuridico** real y permite
+    resolver su legitimación procesal por expediente (Art. 39 CPCN). Un
+    usuario puede encarnar a varios actores (p. ej. un abogado con dos
+    patrocinios); el actor *efectivo* se determina caso a caso en
+    ``caso_actor``, nunca desde el token.
+    """
+
+    __tablename__ = "usuario"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True)
+    password_hash: Mapped[str] = mapped_column(
+        String(128), nullable=False, comment="bcrypt; nunca texto plano."
+    )
+    rol_sistema: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="juez|abogado|publico — rol de plataforma (RBAC de superficie).",
+    )
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("actor_juridico.id", ondelete="SET NULL"),
+        comment="Actor jurídico principal vinculado a esta cuenta.",
+    )
+    activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=func.true())
+
+    actor: Mapped[ActorJuridico | None] = relationship(foreign_keys=[actor_id])
+
+    __table_args__ = (
+        CheckConstraint(
+            "rol_sistema IN ('juez', 'abogado', 'publico')", name="rol_sistema_valido"
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Compatibilidad con bases de datos de prueba embebidas (SQLite).
 # En PostgreSQL, una PK entera autoincremental se traduce a BIGSERIAL de

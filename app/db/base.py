@@ -159,3 +159,5 @@ class AccionAuditoria(str, enum.Enum):
     EMISION_RESOLUCION = "emision_resolucion"
     REGISTRO_PRETENSION = "registro_pretension"
     ANOTACION = "anotacion"
+    INICIO_SESION = "inicio_sesion"
+    INTENTO_LOGIN_FALLIDO = "intento_login_fallido"

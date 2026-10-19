@@ -1,0 +1,14 @@
+# Dependencias de producción — Gemelo Digital del Proceso Civil (Ley 908).
+# Versiones ancladas a la API usada por el código (SQLAlchemy 2.0, Pydantic v2,
+# PyJWT). Para desarrollo/CI usar requirements-dev.txt.
+
+fastapi==0.116.1            # Framework HTTP (adaptadores CQRS)
+uvicorn[standard]==0.35.0   # Servidor ASGI con hot-reload (--reload)
+sqlalchemy==2.0.43          # ORM 2.0 (Mapped / mapped_column)
+pydantic==2.11.7            # Validación de comandos (capa de entrada)
+pydantic-settings==2.10.1   # Configuración tipada desde variables de entorno
+PyJWT==2.10.1               # Firma/verificación JWT (app/auth/security.py)
+bcrypt==4.3.0               # Hashing de contraseñas
+PyYAML==6.0.2               # Reglas de la máquina de estados (flow_reglas.yaml)
+psycopg[binary]==3.2.9      # Driver PostgreSQL para SQLAlchemy
+redis==5.2.1                # Cliente Redis (cola de vencimientos de plazos)

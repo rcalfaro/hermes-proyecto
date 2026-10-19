@@ -1,6 +1,17 @@
 __pycache__/
 *.pyc
 .env
-.venv/
-vscode/
+.vscode/
 .idea/
+node_modules/
+dist/
+build/
+*.log
+*.tmp
+
+# --- Infraestructura local (DevOps) ---
+.env
+pgdata/
+redis-data/
+*.pem
+*.key
