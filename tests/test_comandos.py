@@ -18,8 +18,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.application.commands import (
@@ -38,8 +38,9 @@ from app.db.base import (
     SentidoFallo,
     TipoPretension,
 )
-from app.db.models import ActorJuridico, Caso, CasoActor, Pretension
 from app.engine.flow_engine import Disparador
+from app.auth.security import crear_token_acceso, hash_password
+from app.db.models import ActorJuridico, Caso, CasoActor, Pretension, Usuario
 from app.main import crear_app
 from app.services.calendario_judicial import CalendarioJudicial
 from app.services.plazo_service import EventoVencimiento, TipoPlazo, nuevo_plazo
@@ -63,7 +64,11 @@ def fixture_uow_factory():
     Base.metadata.create_all(engine)
     sesion_factory = sessionmaker(bind=engine, expire_on_commit=False)
     # Convención DI: la fábrica produce UoW ya envuelto (idéntico a producción).
-    yield lambda: SqlAlchemyUnitOfWork(sesion_factory)
+    fabrica = lambda: SqlAlchemyUnitOfWork(sesion_factory)
+    # Zero Trust en tests: get_current_active_user necesita leer la MISMA
+    # SQLite en memoria; exponemos el motor como app.state.engine del cliente.
+    fabrica.engine = engine  # type: ignore[attr-defined]
+    yield fabrica
     engine.dispose()
 
 
@@ -76,8 +81,65 @@ def fixture_contenedor(uow_factory, clock) -> ContenedorDependencias:
 
 
 @pytest.fixture(name="client")
-def fixture_client(contenedor) -> TestClient:
-    return TestClient(crear_app(contenedor))
+def fixture_client(contenedor, uow_factory):
+    """Cliente HTTP con identidad REAL en cada request.
+
+    Zero Trust: los comandos ya no aceptan identidad del body — el endpoint
+    sella ``actor_id`` desde el JWT. El cliente de prueba presenta un token
+    legítimo emitido para la cuenta demo cuyo actor vinculado es el que el
+    test sembró en ``caso_actor`` (la BD manda sobre el token).
+    """
+    app = crear_app(contenedor)
+    app.state.engine = uow_factory.engine  # auth lee la misma SQLite en memoria
+
+    class _AuthTestClient(TestClient):
+        """TestClient que sella un JWT fresco ANTES de cada request."""
+
+        def request(self, method, url, **kw):  # type: ignore[override]
+            headers = dict(kw.pop("headers", None) or {})
+            # Zero Trust en el test: si el test ya proveyó Authorization
+            # (p. ej. token del juez titular), se respeta; solo se sella un
+            # JWT default cuando no hay cabecera explícita.
+            if not any(k.lower() == "authorization" for k in headers):
+                token = _token_activa()
+                if token is not None:
+                    headers["Authorization"] = f"Bearer {token}"
+            kw["headers"] = headers
+            return super().request(method, url, **kw)
+
+    def _token_para(actor_id: uuid.UUID) -> str:
+        """JWT de la cuenta demo vinculada al actor dado (crea el vínculo si falta)."""
+        with Session(uow_factory.engine) as ses:
+            actor = ses.get(ActorJuridico, actor_id)
+            assert actor is not None, "el test debe sembrar el actor antes del request"
+            rol_sistema = "juez" if actor.rol_principal is RolActor.JUEZ else "abogado"
+            usuario = ses.execute(
+                select(Usuario).where(Usuario.actor_id == actor.id)
+            ).scalars().first()
+            if usuario is None:
+                usuario = Usuario(
+                    username=f"tok-{actor.id.hex[:8]}", email=None,
+                    password_hash=hash_password("x"), rol_sistema=rol_sistema,
+                    actor_id=actor.id,
+                )
+                ses.add(usuario); ses.commit(); ses.refresh(usuario)
+            return crear_token_acceso(usuario, contenedor.config_jwt)
+
+    def _token_activa() -> str | None:
+        # Por defecto: último actor NO-juez (demandante/apoderado) sembrado.
+        with Session(uow_factory.engine) as ses:
+            actor = ses.execute(
+                select(ActorJuridico)
+                .where(ActorJuridico.rol_principal.isnot(RolActor.JUEZ))
+                .order_by(ActorJuridico.created_at.desc())
+            ).scalars().first()
+            return None if actor is None else _token_para(actor.id)
+
+    client_ = _AuthTestClient(app)
+    client_.token_para = _token_para  # type: ignore[attr-defined]
+    yield client_
+
+
 
 
 _SEMILLA_SEQ = 0
@@ -93,7 +155,10 @@ def _semilla(uow_factory, *, estado=EstadoProcesal.PRESENTADO) -> dict[str, uuid
     global _SEMILLA_SEQ
     _SEMILLA_SEQ += 1
     n = _SEMILLA_SEQ
-    ids = {k: uuid.uuid4() for k in ("caso", "juez", "demandante", "demandado")}
+    ids = {k: uuid.uuid4() for k in ("caso", "juez", "demandado")}
+    # Demandante = actor que encarna el token de prueba (id determinista por
+    # semilla N; fixture_client lo re-emite contra la misma BD compartida).
+    ids["demandante"] = uuid.uuid5(uuid.NAMESPACE_DNS, f"gemelo-token-{n}")
     # uow_factory YA produce un UoW envuelto (convención del grafo DI).
     with uow_factory() as uow:
         juez = ActorJuridico(
@@ -199,6 +264,18 @@ def test_presentar_demanda_valida_deja_el_caso_para_admision(client, contenedor)
         "juzgado_asignado": "Juzgado 1 Civil",
         "fecha_presentacion": "2026-03-02",
         "hechos": "El demandado adeuda tres mensualidades del contrato de préstamo.",
+        # Requisitos formales del guard de admisión (Art. 146 CPCN):
+        "demandante": {
+            "nombre": "Ana Demandante",
+            "identificacion": "CED-ANA-900",
+            "domicilio": "Barrio El Centro, Managua, casa 42",
+        },
+        "demandado": {
+            "nombre": "Beto Deudor",
+            "domicilio": "Km 8 Carretera Sur, Nicasio, Managua",
+        },
+        "documentos_esenciales": ["contrato_prestamo_firmado.pdf"],
+        "documento_base_url": "https://expedientes.local/contrato-prestamo.pdf",
         "pretensiones": [
             {
                 "codigo_tipo": "cobro_de_dinero",
@@ -266,8 +343,12 @@ def test_contestar_fuera_de_plazo_es_rechazado_409(
         rol_actor=RolActor.DEMANDADO,
         oferta_probatoria="Documental: contrato autenticado.",
     )
+    # Zero Trust: el JWT debe pertenecer al DEMANDADO (parte legitimada para
+    # contestar); el actor_id del body es ignorado por el endpoint.
+    tok_ddo = client.token_para(ids2["demandado"])
     resp = client.post(
-        "/api/comandos/contestar-demanda", json=cmd2.model_dump(mode="json")
+        "/api/comandos/contestar-demanda", json=cmd2.model_dump(mode="json"),
+        headers={"Authorization": f"Bearer {tok_ddo}"},
     )
     assert resp.status_code == 409
     assert "precluid" in resp.json()["detalle"] or "venció" in resp.json()["detalle"]
@@ -290,8 +371,10 @@ def test_dictar_sentencia_emite_evento_con_fundamento_legal(
         parte_resolutiva="POR TANTO: Se declara con lugar la demanda de desalojo.",
         fallos={ids["pretension"]: SentidoFallo.CON_LUGAR},
     )
+    tok_juez = client.token_para(ids["juez"])
     resp = client.post(
-        "/api/comandos/dictar-sentencia", json=cmd.model_dump(mode="json")
+        "/api/comandos/dictar-sentencia", json=cmd.model_dump(mode="json"),
+        headers={"Authorization": f"Bearer {tok_juez}"},
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["estado_resultante"] == "sentenciado"

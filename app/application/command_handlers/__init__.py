@@ -32,6 +32,7 @@ from app.application.commands import (
 )
 from app.application.errors import (
     ConflictoDeEstado,
+    ErrorGuardAdmision,
     ErrorPermisoProcesal,
     ErrorValidacion,
     PlazoPrecluido,
@@ -356,18 +357,94 @@ class PresentarDemandaHandler(BaseHandler):
     No hay transición previa que validar porque el caso nace con el acto;
     la subsanación de una demanda INADMISIBLE_REFORMABLE se modela
     presentando de nuevo sobre el mismo expediente ya creado.
+
+    GUARDS DE ADMISIÓN (``_verificar_guards_admision``): antes de tocar la
+    BD se verifica el cumplimiento de los requisitos formales del libelo
+    (Art. 146 CPCN). Un incumplimiento lanza ``ErrorGuardAdmision`` → HTTP
+    400 con la cita normativa exacta, imitando la inadmisión reformable del
+    Art. 147 CPCN sin persistir nada (transacción abortada por el UoW).
     """
 
     disparador = Disparador.PRESENTAR_DEMANDA
     accion = AccionAuditoria.PRESENTACION_ESCRITO
     alta_desde_comando = True
 
+    #: Vías procesales civiles reconocidas por el CPCN (Ley 908).
+    VIAS_PROCESALES_VALIDAS = frozenset(
+        {
+            "juicio_ordinario_civil",   # Arts. 146 y ss. CPCN
+            "juicio_sumario",           # Arts. 390 y ss. CPCN (desalojo, alimentos)
+            "proceso_monitorio",        # Arts. 448 y ss. CPCN (deuda documentada)
+        }
+    )
+
     def manejar(self, comando: PresentarDemandaCommand) -> ResultadoComando:
+        # Guard de admisión ANTES de cualquier efecto sobre la BD:
+        # el motor de flujo no admite un escrito formalmente defectuoso.
+        self._verificar_guards_admision(comando)
         self._comando_en_curso = comando
         try:
             return self._manejar_transicion(comando, accion_specificas=self._efectos)
         finally:
             del self._comando_en_curso
+
+    # ------------------------------------------------------- guards CPCN
+    @classmethod
+    def _verificar_guards_admision(cls, comando: PresentarDemandaCommand) -> None:
+        """Valida los requisitos formales de la demanda (Art. 146 CPCN).
+
+        Recorre todos los defectos (no falla al primero) para que el abogado
+        pueda subsanar de una sola vez — espíritu del Art. 147 CPCN
+        (inadmisible reformable, tercero día). Cada hallazgo cita su artículo.
+
+        Raises:
+            ErrorGuardAdmision: si falta algún requisito legal (HTTP 400).
+        """
+        defectos: list[str] = []
+
+        # a) Determinación clara de la pretensión (Art. 146 num. 4 + Art. 37).
+        for i, p in enumerate(comando.pretensiones, start=1):
+            descripcion = p.descripcion.strip()
+            if len(descripcion) < 15 or not descripcion.endswith((".", ";", ":")):
+                defectos.append(
+                    f"La pretensión N.º {i} no está determinada con claridad: "
+                    "debe precisar qué se pide al juez (petitum), conforme al "
+                    "Art. 146 numeral 4 y Art. 37 CPCN."
+                )
+        via = comando.tipo_proceso.strip().lower()
+        if via not in cls.VIAS_PROCESALES_VALIDAS:
+            defectos.append(
+                f"Vía procesal '{comando.tipo_proceso}' desconocida: use "
+                "'juicio_ordinario_civil', 'juicio_sumario' o 'proceso_"
+                "monitorio' (Arts. 146, 390 y 448 CPCN)."
+            )
+
+        # b) Identificación y domicilio del demandado (Art. 146 num. 2).
+        ddo = comando.demandado
+        if len(ddo.nombre.strip()) < 3:
+            defectos.append(
+                "Falta la identificación del demandado: nombre o razón social "
+                "insuficiente según el Art. 146 numeral 2 CPCN."
+            )
+        if len(ddo.domicilio.strip()) < 5:
+            defectos.append(
+                "Falta indicar el domicilio del demandado según el Art. 146 "
+                "numeral 2 CPCN: sin dirección cierta es imposible el "
+                "emplazamiento personal (Arts. 168 y ss. CPCN)."
+            )
+
+        # c) Acompañamiento de documentos esenciales (Art. 146 num. 5).
+        anexos = [x for x in comando.documentos_esenciales if x and x.strip()]
+        if not anexos:
+            defectos.append(
+                "La demanda no acompaña documentos esenciales: el título en "
+                "que se funda la acción debe acompañarse al escrito inicial "
+                "(Art. 146 numeral 5 CPCN; en monitorio, prueba literal de la "
+                "deuda — Art. 449 CPCN)."
+            )
+
+        if defectos:
+            raise ErrorGuardAdmision(defectos)
 
     # ------------------------------------------------------------- alta
     def _fundamento_alta(self, comando: Any) -> str:
