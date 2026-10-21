@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* React Flow necesita altura explícita del contenedor + tema base. */
+html, body, #root { height: 100%; }
+.react-flow__attribution { display: none; }
+
+/* Tooltip accesible para acciones bloqueadas (motivo de bloqueo visible). */
+.acciones-bloqueadas .accion-deshabilitada { cursor: not-allowed; }

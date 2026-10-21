@@ -1,0 +1,212 @@
+# =============================================================================
+# Gemelo Digital — Proceso Civil de Nicaragua (Ley 908)
+# Orquestador maestro del ecosistema local.
+#
+# Filosofía:
+#   - Un solo comando para levantar TODO: `docker compose up -d`
+#   - Ningún secreto real en este archivo: todo valor sensible llega de `.env`
+#     (plantilla en .env.example). Las interpolaciones con guardas de error failan al
+#     arrancar si falta una variable obligatoria (nunca se sube medio-configurado).
+#   - healthchecks + depends_on:condition -> orden de arranque garantizado:
+#     db/redis sanos -> backend listo -> frontend proxy OK.
+#   - Red interna `gemelo_network`: db y redis NO publican puertos al host por
+#     defecto (solo loopback), imitando el aislamiento de una red judicial.
+#
+# Windows 11 + WSL2: ejecutar desde la terminal de Ubuntu/WSL dentro del repo
+# (los bind mounts sobre /mnt/c son lentos; clonar el repo en ~ del WSL).
+# Ver README.md sección "Levantar el ecosistema".
+# =============================================================================
+
+name: gemelo-digital-civil-ni
+
+# ---------------------------------------------------------------------------
+# Definiciones reutilizables (YAML anchors): logging con rotación para que
+# un juzgado no llene el disco de logs en semanas.
+# ---------------------------------------------------------------------------
+x-logging: &logging-local
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # -------------------------------------------------------------------------
+  # db — PostgreSQL 15: expediente, auditoría inmutable y reglas de flujo.
+  # -------------------------------------------------------------------------
+  db:
+    image: postgres:15-alpine          # alpine: ~80 MB vs ~430 MB Debian
+    container_name: gemelo-db
+    restart: unless-stopped
+    environment:
+      # Valores SOLO desde .env (credenciales ficticias locales; en producción,
+      # secrets del orquestador, nunca variables en claro).
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:-gemelo_civil}
+      # Locale determinista: ordering de textos idéntico en cualquier máquina.
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: America/Managua              # plazos procesales computados en hora local NI
+    volumes:
+      # Volumen NOMBRADO = persistencia real entre reinicios/upgrades de imagen.
+      - gemelo_pgdata:/var/lib/postgresql/data
+      # initdb ejecuta *.sql en orden alfa: esquema base + endurecimiento.
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Publicamos SOLO en loopback: herramientas locales (psql/DBeaver) pueden
+      # entrar, pero la BD queda inalcanzable desde otros hosts de la LAN.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      # pg_isready como superusuario de la BD: ready = acepta conexiones.
+      # OJO: $POSTGRES_USER con UN solo $ = expansión DENTRO del contenedor (shell de
+      # postgres), no por compose al parsear. Con ${VAR} compose sustituiría el valor
+      # del .env en tiempo de parseo, y si una shell local lo tiene vacío/erróneo el
+      # healthcheck falla -> db nunca queda healthy -> backend/frontend no arrancan.
+      test: ["CMD-SHELL", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks: [gemelo_network]
+    logging: *logging-local
+
+  # -------------------------------------------------------------------------
+  # redis — cola de tareas: vencimientos de plazos (procesar_vencimientos)
+  # y cache efímero de consultas públicas anonimizadas.
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: gemelo-redis
+    restart: unless-stopped
+    command:
+      # appendonly sí: la cola de vencimientos sobrevive a un reinicio.
+      # maxmemory + LRU: Redis es CACHE de trabajo, no almacén jurídico.
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+    volumes:
+      - gemelo_redisdata:/data         # AOF persistente
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks: [gemelo_network]
+    logging: *logging-local
+
+  # -------------------------------------------------------------------------
+  # backend — API FastAPI (CQRS: comandos + queries + auth JWT Zero Trust).
+  # -------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend               # contexto acotado: solo lo que la imagen necesita
+      dockerfile: Dockerfile
+      target: runtime
+    image: gemelo-backend:local
+    container_name: gemelo-backend
+    restart: unless-stopped
+    env_file: .env                     # DSN, GEMELO_JWT_SECRET, etc. (nunca versionado)
+    environment:
+      # Sobrescribimos hostnames: dentro de gemelo_network los servicios se
+      # resuelven POR NOMBRE (no localhost — apunta al propio contenedor).
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-gemelo_civil}
+      REDIS_URL: redis://redis:6379/0
+      GEMELO_ENV: development          # activa hot-reload vía entrypoint.sh
+      TZ: America/Managua
+    volumes:
+      # Bind mount del CÓDIGO: uvicorn --reload detecta cambios en el host y
+      # reinicia el worker sin reconstruir la imagen (feedback < 2 s).
+      - ./app:/srv/gemelo/app:ro
+      - ./config:/srv/gemelo/config:ro
+      - ./tests:/srv/gemelo/tests:ro
+      - ./pytest.ini:/srv/gemelo/pytest.ini:ro
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"   # expuesto para curl/TestClient del host
+    depends_on:
+      # El backend NO arranca hasta que db y redis respondan SANOS.
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # /healthz vive en app/main.py: responde 200 si el grafo DI está alambre.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [gemelo_network]
+    logging: *logging-local
+
+  # -------------------------------------------------------------------------
+  # frontend — SPA React Flow (tablero del caso). En DESARROLLO usa el server
+  # de Vite con hot-reload; la imagen multi-stage del Dockerfile se reserva
+  # para la build de producción/staging (nginx serviendo dist/).
+  # -------------------------------------------------------------------------
+  frontend:
+    image: node:20-alpine
+    container_name: gemelo-frontend
+    restart: unless-stopped
+    working_dir: /app
+    # Comando explícito (sin build) para que el dev-loop sea instantáneo:
+    # node_modules vive en un volumen nombrado, el código entra montado.
+    command: sh -c "npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
+    environment:
+      # Proxy interno de vite.config.ts delega /api -> http://backend:8000.
+      VITE_API_URL: http://backend:8000
+    volumes:
+      - ./frontend-web:/app            # fuente montada: HMR en el navegador
+      - gemelo_node_modules:/app/node_modules   # evita escribir node_modules en /mnt/c (WSL)
+    ports:
+      - "${FRONTEND_PORT:-3000}:5173"  # host:3000 -> vite:5173 (convención Next.js)
+    depends_on:
+      # Orden lógico: el proxy de /api solo tiene sentido con backend arriba.
+      backend:
+        condition: service_healthy
+    networks: [gemelo_network]
+    logging: *logging-local
+
+  # -------------------------------------------------------------------------
+  # scheduler-worker — proceso auxiliar que invoca PlazoService.procesar_
+  # vencimientos() contra la cola Redis (rebeldía/preclusión automáticas).
+  # Mismo código/imagen que backend, distinto punto de entrada: separación
+  # de responsabilidades también a nivel de despliegue.
+  # -------------------------------------------------------------------------
+  worker:
+    image: gemelo-backend:local
+    container_name: gemelo-worker
+    restart: unless-stopped
+    profiles: ["workers"]              # opt-in: docker compose --profile workers up
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-gemelo_civil}
+      REDIS_URL: redis://redis:6379/0
+      TZ: America/Managua
+    command: python -m app.workers.plazos
+    depends_on:
+      backend:
+        condition: service_started
+    networks: [gemelo_network]
+    logging: *logging-local
+
+# ---------------------------------------------------------------------------
+# Redes y volúmenes
+# ---------------------------------------------------------------------------
+networks:
+  gemelo_network:
+    driver: bridge
+    # Subred aislada y fija: facilita reglas de firewall y evita colisiones con
+    # otras redes Docker del desarrollador.
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  gemelo_pgdata:       # datos judiciales: sobreviven `compose down` SIN -v
+  gemelo_redisdata:    # AOF de la cola de vencimientos
+  gemelo_node_modules: # velocidad en WSL2: node_modules fuera del bind mount
