@@ -15,7 +15,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.endpoints import obtener_contenedor
 from app.application.unit_of_work import SqlAlchemyUnitOfWork
@@ -108,18 +108,87 @@ router = APIRouter(prefix="/api", tags=["consultas"])
 
 @router.get("/casos/{caso_id}", response_model=dict)
 def leer_caso(caso_id: uuid.UUID, request: Request) -> dict[str, Any]:
-    """Estado actual del expediente con sus pretensiones (ADN del proceso)."""
+    """GetCasoQuery — estado actual + pretensión + historial de auditoría.
+
+    Vista completa del expediente para el tablero y la búsqueda de casos:
+    * ``caso``: fotografía del estado vital (etapa/estado, Art. 148 CPCN).
+    * ``pretensiones``: petitum deducido (ADN del proceso, Arts. 37/146).
+    * ``historial``: log de auditoría cronológico (trazabilidad inmutable;
+      cada evento lleva su fundamento legal — requisito de replay).
+    """
     with _uow(request) as uow:
         caso = uow.session.get(Caso, caso_id)
         if caso is None:
             raise HTTPException(status_code=404, detail="Expediente inexistente.")
+        filas = uow.session.scalars(
+            select(LogAuditoria)
+            .where(LogAuditoria.caso_id == caso_id)
+            .order_by(LogAuditoria.id)
+        ).all()
+        historial = [
+            EntradaAuditoriaDTO(
+                id=f.id,
+                timestamp_evento=f.timestamp_evento,
+                accion=f.accion.value if hasattr(f.accion, "value") else str(f.accion),
+                entidad_afectada=f.entidad_afectada,
+                actor_id=f.actor_id,
+                estado_antes=f.estado_antes,
+                estado_despues=f.estado_despues,
+                fundamento_legal=(f.detalle or {}).get("fundamento_legal"),
+                detalle=f.detalle or {},
+            )
+            for f in filas
+        ]
         return {
             "caso": EstadoCasoDTO.model_validate(caso).model_dump(mode="json"),
             "pretensiones": [
                 PretensionDTO.model_validate(p).model_dump(mode="json")
                 for p in caso.pretensiones
             ],
+            "historial": [h.model_dump(mode="json") for h in historial],
         }
+
+
+@router.get("/casos", response_model=list[dict])
+def buscar_casos(
+    request: Request,
+    q: str | None = None,
+    estado: str | None = None,
+    limite: int = 20,
+) -> list[dict[str, Any]]:
+    """Búsqueda de expedientes por número, materia o estado procesal.
+
+    Solo lectura (query side CQRS). ``q`` hace match insensible a mayúsculas
+    sobre número de expediente, materia o juzgado asignado.
+    """
+    limite = max(1, min(limite, 100))
+    with _uow(request) as uow:
+        consulta = select(Caso).order_by(Caso.fecha_presentacion_demanda.desc())
+        if q:
+            patron = f"%{q.strip().lower()}%"
+            consulta = consulta.where(
+                func.lower(Caso.numero_expediente).like(patron)
+                | func.lower(Caso.materia).like(patron)
+                | func.lower(Caso.juzgado_asignado).like(patron)
+            )
+        if estado:
+            consulta = consulta.where(Caso.estado_actual == estado)
+        casos = uow.session.scalars(consulta.limit(limite)).all()
+        return [
+            {
+                "id": str(c.id),
+                "numero_expediente": c.numero_expediente,
+                "materia": c.materia,
+                "juzgado_asignado": c.juzgado_asignado,
+                "etapa_actual": c.etapa_actual.value,
+                "estado_actual": c.estado_actual.value,
+                "fecha_presentacion_demanda": c.fecha_presentacion_demanda.isoformat(),
+                "pretension_principal": (
+                    c.pretensiones[0].codigo_tipo.value if c.pretensiones else None
+                ),
+            }
+            for c in casos
+        ]
 
 
 @router.get("/casos/{caso_id}/historial", response_model=list[EntradaAuditoriaDTO])

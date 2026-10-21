@@ -59,3 +59,20 @@ class PlazoPrecluido(ErrorAplicacion):
     """Facultad extinguida por vencimiento del plazo (Art. 134 CPCN) → 409."""
 
     status_code = 409
+
+
+class ErrorGuardAdmision(ErrorAplicacion):
+    """Demanda que incumple los requisitos formales del Art. 146 CPCN → 400.
+
+    Guard de admisión de la capa de aplicación: la demanda NO se persiste.
+    Imita la inadmisión reformable del Art. 147 CPCN, devolviendo TODOS los
+    defectos detectados (con su cita normativa) para que el promovente los
+    subsane de una sola vez dentro de tercero día.
+    """
+
+    status_code = 400
+
+    def __init__(self, defectos: list[str]) -> None:
+        detalle = " | ".join(defectos) if defectos else "Requisitos legales faltantes."
+        super().__init__(detalle)
+        self.defectos = defectos

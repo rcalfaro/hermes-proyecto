@@ -54,6 +54,35 @@ class PretensionInput(BaseModel):
     es_principal: bool = True
 
 
+class DatosParte(BaseModel):
+    """Identificación de una parte procesal (demandante/demandado).
+
+    Art. 146 numerales 1 y 2 CPCN: nombre y domicilio del demandante y del
+    demandado son requisitos formales INDESPENSABLES de la demanda; su falta
+    genera inadmisión reformable (Art. 147 CPCN), que aquí se modela como
+    guard de admisión con HTTP 400.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    nombre: str = Field(
+        min_length=3, max_length=255, description="Nombre o razón social."
+    )
+    identificacion: str | None = Field(
+        default=None,
+        max_length=30,
+        description="Cédula de identidad o RUC (identificación fiscal NI).",
+    )
+    domicilio: str = Field(
+        min_length=5,
+        max_length=255,
+        description=(
+            "Dirección real para emplazamiento (Art. 146 num. 2 / Arts. 168 y "
+            "ss. CPCN — notificaciones personales)."
+        ),
+    )
+
+
 class PresentarDemandaCommand(ComandoBase):
     """Promoción del juicio ordinario civil (Arts. 37, 146-147 CPCN).
 
@@ -61,17 +90,49 @@ class PresentarDemandaCommand(ComandoBase):
     expediente en estado ``PRESENTADO`` para calificación judicial.
     Si el caso ya está ``INADMISIBLE_REFORMABLE``, representa la subsanación
     dentro de tercero día (Art. 147 CPCN).
+
+    Los campos estructurados (partes, pretensión, hechos, documentos) son
+    verificados por los Guards de Admisión del handler ANTES de persistir
+    cualquier dato (Art. 148 CPCN — calificación judicial simulada).
     """
 
-    tipo_proceso: str = Field(default="juicio_ordinario_civil", max_length=40)
+    tipo_proceso: str = Field(
+        default="juicio_ordinario_civil",
+        max_length=40,
+        description=(
+            "Vía procesal según la pretensión: 'juicio_ordinario_civil', "
+            "'juicio_sumario' (ej. desalojo/alimentos) o 'proceso_monitorio' "
+            "(deuda documentada) — Arts. 390 y ss., 448 y ss. CPCN."
+        ),
+    )
     materia: str = Field(min_length=3, max_length=60)
     juzgado_asignado: str = Field(min_length=5, max_length=120)
     fecha_presentacion: date
     cuantia: Decimal | None = Field(default=None, ge=0)
+    demandante: DatosParte = Field(
+        description="Identificación y domicilio del actor (Art. 146 num. 1 CPCN)."
+    )
+    demandado: DatosParte = Field(
+        description="Identificación y domicilio del demandado (Art. 146 num. 2 CPCN)."
+    )
     hechos: str = Field(
-        min_length=20, description="Relación de hechos (Art. 146 num. 3)."
+        min_length=20, description="Relación circunstanciada de hechos (Art. 146 num. 3)."
     )
     pretensiones: list[PretensionInput] = Field(min_length=1)
+    #: Documento base de la demanda (título en que se funda la acción,
+    #: Art. 146 num. 5 CPCN). Simulado por ahora con URL/nombre de archivo;
+    #: preparado para multipart-upload sin cambiar el contrato del comando.
+    documento_base_url: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Enlace al documento base (ej. contrato de arrendamiento).",
+    )
+    #: Documentos esenciales acompañados (comprobante de deuda, certificado
+    #: registral, poder del apoderado...). Lista vacía ⇒ guard de admisión.
+    documentos_esenciales: list[str] = Field(
+        default_factory=list,
+        description="Inventario de anexos presentados junto al libelo.",
+    )
 
     @field_validator("fecha_presentacion")
     @classmethod
